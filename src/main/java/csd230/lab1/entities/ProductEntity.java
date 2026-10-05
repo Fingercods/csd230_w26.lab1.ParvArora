@@ -59,7 +59,9 @@ public abstract class ProductEntity implements Serializable, SaleableItem {
 
         return id != null && Objects.equals(id, that.id);
     }
-
+    public String getProductType() {
+        return this.getClass().getSimpleName();
+    }
     @Override
     public int hashCode() {
         return getClass().hashCode();
