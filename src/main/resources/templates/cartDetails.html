@@ -36,7 +36,13 @@
 </table>
 
 <br>
+<form th:unless="${cart.products.isEmpty()}"
+      th:action="@{/cart/checkout}"
+      method="post">
+    <button type="submit">Checkout</button>
+</form>
 
+<br>
 <a th:href="@{/books}">Continue Shopping</a>
 
 </body>

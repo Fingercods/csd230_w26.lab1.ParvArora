@@ -9,6 +9,7 @@ classDiagram
     Serializable <|.. Product
 
     Cart "0..*" --> "0..*" Product : contains
+    OrderEntity "0..*" --> "0..*" Product : contains
 
     class Product {
         -Long id
@@ -21,6 +22,21 @@ classDiagram
         +addItem(Product)
         +getItems()
         +setItems()
+    }
+
+    class OrderEntity {
+        -Long id
+        -double totalAmount
+        -LocalDateTime orderDate
+        -Set products
+        +getId()
+        +getTotalAmount()
+        +setTotalAmount()
+        +getOrderDate()
+        +setOrderDate()
+        +getProducts()
+        +setProducts()
+        +addProduct(Product)
     }
 
     class Serializable {
@@ -39,42 +55,23 @@ classDiagram
         -double price
         -int copies
         +getPrice()
-
-        +Publication()
-        +Publication(String title, double price, int copies)
-        +toString()
-        +equals()
-        +hashCode()
     }
 
     class Book {
         -String isbn
         -String author
         +sellItem()
-
-        +Book()
-        +Book(String author)
-        +Book(String author, String title, double price, int copies)
-        +toString()
-        +equals()
-        +hashCode()
     }
 
     class Magazine {
         -int orderQty
-        -java.util.Date currentIssue
-
-        +Magazine()
-        +Magazine(int orderQty, Date currentIssue, String title, double price, int copies)
+        -Date currentIssue
         +sellItem()
     }
 
     class DiscMag {
         -boolean hasDisc
         +sellItem()
-
-        +DiscMag()
-        +DiscMag(boolean hasDisc, int orderQty, Date currentIssue, String title, double price, int copies)
     }
 
     class SaleableItem {
