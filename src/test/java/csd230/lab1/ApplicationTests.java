@@ -1,5 +1,9 @@
-package csd230.lab1;
 
+package csd230.lab1;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import csd230.lab1.entities.BookEntity;
 import csd230.lab1.entities.CartEntity;
 import csd230.lab1.repositories.BookEntityRepository;
@@ -8,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
 
 import java.util.List;
 
@@ -112,5 +117,13 @@ class ApplicationTests {
         assertTrue(
                 foundBook.getCarts().contains(foundCart)
         );
+    }
+    @TestConfiguration
+    static class TestConfig {
+
+        @Bean
+        PasswordEncoder passwordEncoder() {
+            return new BCryptPasswordEncoder();
+        }
     }
 }

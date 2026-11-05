@@ -1,7 +1,7 @@
+
 package csd230.lab1.entities;
 
 import jakarta.persistence.*;
-
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -12,8 +12,11 @@ public class CartEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
     private Long id;
+
+    @OneToOne
+    @JoinColumn(name = "user_id", unique = true)
+    private UserEntity user;
 
     @ManyToMany(cascade = {
             CascadeType.PERSIST,
@@ -27,7 +30,7 @@ public class CartEntity {
     private Set<ProductEntity> products = new LinkedHashSet<>();
 
     public void addProduct(ProductEntity product) {
-        this.products.add(product);
+        products.add(product);
         product.getCarts().add(this);
     }
 
@@ -37,6 +40,14 @@ public class CartEntity {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public UserEntity getUser() {
+        return user;
+    }
+
+    public void setUser(UserEntity user) {
+        this.user = user;
     }
 
     public Set<ProductEntity> getProducts() {
@@ -63,7 +74,6 @@ public class CartEntity {
         }
 
         CartEntity that = (CartEntity) o;
-
         return id != null && Objects.equals(id, that.id);
     }
 

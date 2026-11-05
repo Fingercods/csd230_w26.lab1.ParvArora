@@ -1,11 +1,14 @@
+
 package csd230.lab1.controllers;
 
 import csd230.lab1.entities.*;
 import csd230.lab1.repositories.BookEntityRepository;
 import csd230.lab1.repositories.CartEntityRepository;
 import csd230.lab1.repositories.OrderEntityRepository;
+import csd230.lab1.repositories.UserEntityRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -27,24 +30,46 @@ public class CartController {
     @Autowired
     private OrderEntityRepository orderRepository;
 
+    @Autowired
+    private UserEntityRepository userRepository;
+
+    private CartEntity getUserCart(Authentication authentication) {
+        String username = authentication.getName();
+
+        CartEntity cart = cartRepository.findByUserUsername(username);
+
+        if (cart == null) {
+            UserEntity user = userRepository.findByUsername(username);
+
+            if (user == null) {
+                throw new IllegalStateException("User not found");
+            }
+
+            cart = new CartEntity();
+            cart.setUser(user);
+            cart = cartRepository.save(cart);
+        }
+
+        return cart;
+    }
+
     @GetMapping
-    public String viewCart(Model model) {
-        Long defaultCartId = 1L;
-
-        CartEntity cart = cartRepository.findById(defaultCartId)
-                .orElseGet(() -> cartRepository.save(new CartEntity()));
-
+    @Transactional
+    public String viewCart(Model model, Authentication authentication) {
+        CartEntity cart = getUserCart(authentication);
         model.addAttribute("cart", cart);
         return "cartDetails";
     }
 
     @GetMapping("/add/{bookId}")
-    public String addToCart(@PathVariable Long bookId) {
+    @Transactional
+    public String addToCart(@PathVariable Long bookId,
+                            Authentication authentication) {
 
-        CartEntity cart = cartRepository.findById(1L).orElse(null);
+        CartEntity cart = getUserCart(authentication);
         BookEntity book = bookRepository.findById(bookId).orElse(null);
 
-        if (cart != null && book != null) {
+        if (book != null) {
             cart.addProduct(book);
             cartRepository.save(cart);
         }
@@ -53,13 +78,16 @@ public class CartController {
     }
 
     @GetMapping("/remove/{bookId}")
-    public String removeFromCart(@PathVariable Long bookId) {
+    @Transactional
+    public String removeFromCart(@PathVariable Long bookId,
+                                 Authentication authentication) {
 
-        CartEntity cart = cartRepository.findById(1L).orElse(null);
+        CartEntity cart = getUserCart(authentication);
         BookEntity book = bookRepository.findById(bookId).orElse(null);
 
-        if (cart != null && book != null) {
+        if (book != null) {
             cart.getProducts().remove(book);
+            book.getCarts().remove(cart);
             cartRepository.save(cart);
         }
 
@@ -68,11 +96,11 @@ public class CartController {
 
     @PostMapping("/checkout")
     @Transactional
-    public String checkout() {
+    public String checkout(Authentication authentication) {
 
-        CartEntity cart = cartRepository.findById(1L).orElse(null);
+        CartEntity cart = getUserCart(authentication);
 
-        if (cart == null || cart.getProducts().isEmpty()) {
+        if (cart.getProducts().isEmpty()) {
             return "redirect:/cart";
         }
 
@@ -104,6 +132,10 @@ public class CartController {
         order.setProducts(purchasedProducts);
 
         orderRepository.save(order);
+
+        for (ProductEntity product : purchasedProducts) {
+            product.getCarts().remove(cart);
+        }
 
         cart.getProducts().clear();
         cartRepository.save(cart);

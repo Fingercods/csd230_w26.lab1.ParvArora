@@ -2,10 +2,8 @@
 package csd230.lab1;
 
 import csd230.lab1.entities.BookEntity;
-import csd230.lab1.entities.CartEntity;
 import csd230.lab1.entities.UserEntity;
 import csd230.lab1.repositories.BookEntityRepository;
-import csd230.lab1.repositories.CartEntityRepository;
 import csd230.lab1.repositories.UserEntityRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -16,16 +14,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class Application implements CommandLineRunner {
 
     private final BookEntityRepository bookRepository;
-    private final CartEntityRepository cartRepository;
     private final UserEntityRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
     public Application(BookEntityRepository bookRepository,
-                       CartEntityRepository cartRepository,
                        UserEntityRepository userRepository,
                        PasswordEncoder passwordEncoder) {
         this.bookRepository = bookRepository;
-        this.cartRepository = cartRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
@@ -54,9 +49,6 @@ public class Application implements CommandLineRunner {
             second.setIsbn("ISBN-1002");
             bookRepository.save(second);
         }
-
-        cartRepository.findById(1L)
-                .orElseGet(() -> cartRepository.save(new CartEntity()));
 
         if (userRepository.findByUsername("admin") == null) {
             UserEntity admin = new UserEntity(
