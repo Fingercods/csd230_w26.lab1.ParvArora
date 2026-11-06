@@ -1,16 +1,18 @@
+
 package csd230.lab1.pojos;
 
 import java.util.Objects;
 
 public abstract class Publication extends Product {
+
     private String title = "";
-    private double price = 0.0;
-    private int copies = 0;
+    private Double price = 0.0;
+    private Integer copies = 0;
 
     public Publication() {
     }
 
-    public Publication(String title, double price, int copies) {
+    public Publication(String title, Double price, Integer copies) {
         this.title = title;
         this.price = price;
         this.copies = copies;
@@ -19,10 +21,9 @@ public abstract class Publication extends Product {
     @Override
     public void initialize() {
         System.out.println("Enter Title:");
-        this.title = getInput("Available Title"); // "Available Title" is default if empty
+        this.title = getInput("Available Title");
     }
 
-    // Helper used by subclasses during initialize
     protected void initPriceCopies() {
         System.out.println("Enter copies:");
         this.copies = getInput(0);
@@ -44,11 +45,11 @@ public abstract class Publication extends Product {
     }
 
     @Override
-    public double getPrice() {
+    public Double getPrice() {
         return price;
     }
 
-    public void setPrice(double price) {
+    public void setPrice(Double price) {
         this.price = price;
     }
 
@@ -60,11 +61,11 @@ public abstract class Publication extends Product {
         this.title = title;
     }
 
-    public int getCopies() {
+    public Integer getCopies() {
         return copies;
     }
 
-    public void setCopies(int copies) {
+    public void setCopies(Integer copies) {
         this.copies = copies;
     }
 
@@ -77,10 +78,12 @@ public abstract class Publication extends Product {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Publication)) return false;
+
         Publication that = (Publication) o;
-        return Double.compare(that.price, price) == 0 &&
-                copies == that.copies &&
-                Objects.equals(title, that.title);
+
+        return Objects.equals(title, that.title)
+                && Objects.equals(price, that.price)
+                && Objects.equals(copies, that.copies);
     }
 
     @Override

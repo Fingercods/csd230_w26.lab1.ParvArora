@@ -1,8 +1,10 @@
+
 package csd230.lab1.pojos;
 
 public class Ticket extends Product {
+
     public String description = "";
-    public double price = 0.0;
+    public Double price = 0.0;
 
     @Override
     public void sellItem() {
@@ -10,7 +12,7 @@ public class Ticket extends Product {
     }
 
     @Override
-    public double getPrice() {
+    public Double getPrice() {
         return price;
     }
 
