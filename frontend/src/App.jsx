@@ -1,5 +1,6 @@
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router'
 import './App.css'
 
 const types = {
@@ -47,81 +48,266 @@ function blankForm(type) {
     return result
 }
 
-function App() {
-    const [username, setUsername] = useState('user')
-    const [password, setPassword] = useState('user')
-    const [token, setToken] = useState('')
-    const [type, setType] = useState('books')
-    const [items, setItems] = useState([])
-    const [form, setForm] = useState(blankForm('books'))
-    const [editingId, setEditingId] = useState(null)
-    const [message, setMessage] = useState('')
-    const [loading, setLoading] = useState(false)
-
-    async function loadItems(selectedType = type, jwt = token) {
-        const response = await fetch(`/api/rest/${selectedType}`, {
-            headers: {
-                Authorization: `Bearer ${jwt}`
-            }
-        })
-
-        if (!response.ok) {
-            throw new Error(`Could not load ${types[selectedType].label} (${response.status})`)
-        }
-
-        const data = await response.json()
-        setItems(data)
+function displayValue(item, field) {
+    if (field === 'price') {
+        return `$${Number(item[field] ?? 0).toFixed(2)}`
     }
 
-    async function login(event) {
-        event.preventDefault()
+    if (field === 'hasDisc') {
+        return item[field] ? 'Yes' : 'No'
+    }
+
+    if (field === 'currentIssue') {
+        return item[field]
+            ? String(item[field]).replace('T', ' ').slice(0, 16)
+            : '-'
+    }
+
+    return item[field] ?? '-'
+}
+
+function ProductList({ type, token, setMessage }) {
+    const [items, setItems] = useState([])
+    const [loading, setLoading] = useState(true)
+    const navigate = useNavigate()
+
+    useEffect(() => {
+        let active = true
+
+        async function load() {
+            setLoading(true)
+
+            try {
+                const response = await fetch(`/api/rest/${type}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Could not load ${types[type].label} (${response.status})`)
+                }
+
+                const data = await response.json()
+
+                if (active) {
+                    setItems(data)
+                }
+            } catch (error) {
+                if (active) {
+                    setMessage(error.message)
+                }
+            } finally {
+                if (active) {
+                    setLoading(false)
+                }
+            }
+        }
+
+        load()
+
+        return () => {
+            active = false
+        }
+    }, [type, token, setMessage])
+
+    async function refresh() {
         setLoading(true)
         setMessage('')
 
         try {
-            const response = await fetch('/api/rest/auth/login', {
-                method: 'POST',
+            const response = await fetch(`/api/rest/${type}`, {
                 headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password })
+                    Authorization: `Bearer ${token}`
+                }
             })
 
             if (!response.ok) {
-                throw new Error('Invalid username or password')
+                throw new Error(`Could not load ${types[type].label} (${response.status})`)
             }
 
-            const data = await response.json()
-
-            await loadItems(type, data.token)
-            setToken(data.token)
-            setMessage('Login successful!')
+            setItems(await response.json())
+            setMessage(`${types[type].label} refreshed!`)
         } catch (error) {
-            setToken('')
-            setItems([])
             setMessage(error.message)
         } finally {
             setLoading(false)
         }
     }
 
-    async function changeType(nextType) {
-        if (nextType === type) return
+    async function deleteItem(id) {
+        if (!window.confirm(`Are you sure you want to delete this ${types[type].singular}?`)) {
+            return
+        }
 
         setLoading(true)
         setMessage('')
 
         try {
-            await loadItems(nextType)
-            setType(nextType)
-            setForm(blankForm(nextType))
-            setEditingId(null)
+            const response = await fetch(`/api/rest/${type}/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+
+            if (!response.ok) {
+                throw new Error(`Could not delete ${types[type].singular} (${response.status})`)
+            }
+
+            const listResponse = await fetch(`/api/rest/${type}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+
+            if (!listResponse.ok) {
+                throw new Error(`Deleted, but could not refresh list (${listResponse.status})`)
+            }
+
+            setItems(await listResponse.json())
+            setMessage(`${types[type].singular} deleted successfully!`)
         } catch (error) {
             setMessage(error.message)
         } finally {
             setLoading(false)
         }
     }
+
+    return (
+        <div className="card">
+            <div className="header">
+                <h2>{types[type].label}</h2>
+                <div className="actions">
+                    <button disabled={loading} onClick={refresh}>
+                        Refresh
+                    </button>
+                    <button disabled={loading} onClick={() => navigate(`/${type}/add`)}>
+                        Add {types[type].singular}
+                    </button>
+                </div>
+            </div>
+
+            {loading ? (
+                <p>Loading...</p>
+            ) : (
+                <>
+                    <div className="table-wrapper">
+                        <table>
+                            <thead>
+                            <tr>
+                                <th>ID</th>
+                                {types[type].fields.map(field => (
+                                    <th key={field}>{fieldNames[field]}</th>
+                                ))}
+                                <th>Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {items.map(item => (
+                                <tr key={item.id}>
+                                    <td>{item.id}</td>
+                                    {types[type].fields.map(field => (
+                                        <td key={field}>{displayValue(item, field)}</td>
+                                    ))}
+                                    <td>
+                                        <div className="actions">
+                                            <button onClick={() => navigate(`/${type}/edit/${item.id}`)}>
+                                                Edit
+                                            </button>
+                                            <button className="delete" onClick={() => deleteItem(item.id)}>
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {items.length === 0 && (
+                        <p>No {types[type].label.toLowerCase()} found.</p>
+                    )}
+                </>
+            )}
+        </div>
+    )
+}
+
+function ProductForm({ type, token, setMessage }) {
+    const { id } = useParams()
+    const navigate = useNavigate()
+    const editing = id !== undefined
+    const [form, setForm] = useState(() => blankForm(type))
+    const [loading, setLoading] = useState(false)
+    const [loadingItem, setLoadingItem] = useState(editing)
+    const [loadError, setLoadError] = useState('')
+
+    useEffect(() => {
+        let active = true
+
+        if (!editing) {
+            return
+        }
+
+        async function loadItem() {
+            setLoadingItem(true)
+            setLoadError('')
+
+            try {
+                const response = await fetch(`/api/rest/${type}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Could not load ${types[type].singular} (${response.status})`)
+                }
+
+                const items = await response.json()
+                const item = items.find(value => String(value.id) === String(id))
+
+                if (!item) {
+                    throw new Error(`${types[type].singular} #${id} was not found`)
+                }
+
+                const updatedForm = {}
+
+                types[type].fields.forEach(field => {
+                    if (field === 'hasDisc') {
+                        updatedForm[field] = Boolean(item[field])
+                    } else if (field === 'currentIssue') {
+                        updatedForm[field] = item[field]
+                            ? String(item[field]).slice(0, 16)
+                            : ''
+                    } else {
+                        updatedForm[field] = String(item[field] ?? '')
+                    }
+                })
+
+                if (active) {
+                    setForm(updatedForm)
+                }
+            } catch (error) {
+                if (active) {
+                    setLoadError(error.message)
+                    setMessage(error.message)
+                }
+            } finally {
+                if (active) {
+                    setLoadingItem(false)
+                }
+            }
+        }
+
+        loadItem()
+
+        return () => {
+            active = false
+        }
+    }, [editing, id, type, token, setMessage])
 
     function updateForm(event) {
         const { name, value, type: inputType, checked } = event.target
@@ -151,15 +337,13 @@ function App() {
                 : null
         }
 
-        const url = editingId === null
-            ? `/api/rest/${type}`
-            : `/api/rest/${type}/${editingId}`
-
-        const method = editingId === null ? 'POST' : 'PUT'
+        const url = editing
+            ? `/api/rest/${type}/${id}`
+            : `/api/rest/${type}`
 
         try {
             const response = await fetch(url, {
-                method,
+                method: editing ? 'PUT' : 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`
@@ -171,10 +355,8 @@ function App() {
                 throw new Error(`Could not save ${types[type].singular} (${response.status})`)
             }
 
-            await loadItems()
-            setForm(blankForm(type))
-            setEditingId(null)
             setMessage(`${types[type].singular} saved successfully!`)
+            navigate(`/${type}`)
         } catch (error) {
             setMessage(error.message)
         } finally {
@@ -182,62 +364,117 @@ function App() {
         }
     }
 
-    function editItem(item) {
-        const updatedForm = {}
+    return (
+        <div className="card">
+            <h2>
+                {editing
+                    ? `Edit ${types[type].singular} #${id}`
+                    : `Add New ${types[type].singular}`}
+            </h2>
 
-        types[type].fields.forEach(field => {
-            if (field === 'hasDisc') {
-                updatedForm[field] = Boolean(item[field])
-            } else if (field === 'currentIssue') {
-                updatedForm[field] = item[field]
-                    ? String(item[field]).slice(0, 16)
-                    : ''
-            } else {
-                updatedForm[field] = String(item[field] ?? '')
-            }
-        })
+            {loadingItem ? (
+                <p>Loading product...</p>
+            ) : loadError ? (
+                <p>{loadError}</p>
+            ) : (
+                <form onSubmit={saveItem}>
+                    {types[type].fields.map(field => (
+                        <div className="form-field" key={field}>
+                            <label htmlFor={field}>{fieldNames[field]}</label>
 
-        setForm(updatedForm)
-        setEditingId(item.id)
-        setMessage(`Editing ${types[type].singular} #${item.id}`)
-    }
+                            {field === 'hasDisc' ? (
+                                <input
+                                    id={field}
+                                    name={field}
+                                    type="checkbox"
+                                    checked={form[field]}
+                                    onChange={updateForm}
+                                />
+                            ) : (
+                                <input
+                                    id={field}
+                                    name={field}
+                                    value={form[field]}
+                                    onChange={updateForm}
+                                    type={
+                                        field === 'currentIssue'
+                                            ? 'datetime-local'
+                                            : ['price', 'copies', 'orderQty'].includes(field)
+                                                ? 'number'
+                                                : 'text'
+                                    }
+                                    step={
+                                        field === 'price'
+                                            ? '0.01'
+                                            : ['copies', 'orderQty'].includes(field)
+                                                ? '1'
+                                                : undefined
+                                    }
+                                    min={
+                                        ['price', 'copies', 'orderQty'].includes(field)
+                                            ? '0'
+                                            : undefined
+                                    }
+                                    required={field !== 'currentIssue'}
+                                />
+                            )}
+                        </div>
+                    ))}
 
-    function cancelEdit() {
-        setForm(blankForm(type))
-        setEditingId(null)
-        setMessage('')
-    }
+                    <div className="actions">
+                        <button disabled={loading}>
+                            {loading
+                                ? 'Saving...'
+                                : editing
+                                    ? `Update ${types[type].singular}`
+                                    : `Add ${types[type].singular}`}
+                        </button>
 
-    async function deleteItem(id) {
-        const confirmed = window.confirm(
-            `Are you sure you want to delete this ${types[type].singular}?`
-        )
+                        <button
+                            type="button"
+                            className="cancel"
+                            onClick={() => navigate(`/${type}`)}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            )}
+        </div>
+    )
+}
 
-        if (!confirmed) return
+function App() {
+    const [username, setUsername] = useState('user')
+    const [password, setPassword] = useState('user')
+    const [token, setToken] = useState('')
+    const [message, setMessage] = useState('')
+    const [loading, setLoading] = useState(false)
+    const navigate = useNavigate()
+    const location = useLocation()
 
+    async function login(event) {
+        event.preventDefault()
         setLoading(true)
         setMessage('')
 
         try {
-            const response = await fetch(`/api/rest/${type}/${id}`, {
-                method: 'DELETE',
+            const response = await fetch('/api/rest/auth/login', {
+                method: 'POST',
                 headers: {
-                    Authorization: `Bearer ${token}`
-                }
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
             })
 
             if (!response.ok) {
-                throw new Error(`Could not delete ${types[type].singular} (${response.status})`)
+                throw new Error('Invalid username or password')
             }
 
-            await loadItems()
-
-            if (editingId === id) {
-                setForm(blankForm(type))
-                setEditingId(null)
-            }
-
-            setMessage(`${types[type].singular} deleted successfully!`)
+            const data = await response.json()
+            setToken(data.token)
+            setMessage('Login successful!')
+            navigate('/inventory')
         } catch (error) {
             setMessage(error.message)
         } finally {
@@ -247,30 +484,9 @@ function App() {
 
     function logout() {
         setToken('')
-        setItems([])
         setPassword('')
-        setType('books')
-        setForm(blankForm('books'))
-        setEditingId(null)
         setMessage('Logged out successfully')
-    }
-
-    function displayValue(item, field) {
-        if (field === 'price') {
-            return `$${Number(item[field] ?? 0).toFixed(2)}`
-        }
-
-        if (field === 'hasDisc') {
-            return item[field] ? 'Yes' : 'No'
-        }
-
-        if (field === 'currentIssue') {
-            return item[field]
-                ? String(item[field]).replace('T', ' ').slice(0, 16)
-                : '-'
-        }
-
-        return item[field] ?? '-'
+        navigate('/inventory')
     }
 
     return (
@@ -316,163 +532,68 @@ function App() {
                         <p>Welcome, {username}!</p>
 
                         <div className="tabs">
-                            {Object.keys(types).map(key => (
-                                <button
-                                    key={key}
-                                    disabled={loading}
-                                    className={type === key ? 'active' : ''}
-                                    onClick={() => changeType(key)}
-                                >
-                                    {types[key].label}
-                                </button>
-                            ))}
+                            {Object.keys(types).map(type => {
+                                const path = type === 'books' ? '/inventory' : `/${type}`
+
+                                return (
+                                    <Link key={type} to={path}>
+                                        <button
+                                            className={
+                                                location.pathname === path ||
+                                                location.pathname.startsWith(`/${type}/`)
+                                                    ? 'active'
+                                                    : ''
+                                            }
+                                        >
+                                            {types[type].label}
+                                        </button>
+                                    </Link>
+                                )
+                            })}
                         </div>
-
-                        <div className="header">
-                            <h2>{types[type].label}</h2>
-
-                            <button
-                                disabled={loading}
-                                onClick={async () => {
-                                    setLoading(true)
-                                    try {
-                                        await loadItems()
-                                        setMessage(`${types[type].label} refreshed!`)
-                                    } catch (error) {
-                                        setMessage(error.message)
-                                    } finally {
-                                        setLoading(false)
-                                    }
-                                }}
-                            >
-                                Refresh
-                            </button>
-                        </div>
-
-                        <div className="table-wrapper">
-                            <table>
-                                <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    {types[type].fields.map(field => (
-                                        <th key={field}>{fieldNames[field]}</th>
-                                    ))}
-                                    <th>Actions</th>
-                                </tr>
-                                </thead>
-
-                                <tbody>
-                                {items.map(item => (
-                                    <tr key={item.id}>
-                                        <td>{item.id}</td>
-
-                                        {types[type].fields.map(field => (
-                                            <td key={field}>
-                                                {displayValue(item, field)}
-                                            </td>
-                                        ))}
-
-                                        <td>
-                                            <div className="actions">
-                                                <button
-                                                    disabled={loading}
-                                                    onClick={() => editItem(item)}
-                                                >
-                                                    Edit
-                                                </button>
-
-                                                <button
-                                                    disabled={loading}
-                                                    className="delete"
-                                                    onClick={() => deleteItem(item.id)}
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {items.length === 0 && (
-                            <p>No {types[type].label.toLowerCase()} found.</p>
-                        )}
                     </div>
 
-                    <div className="card">
-                        <h2>
-                            {editingId === null
-                                ? `Add New ${types[type].singular}`
-                                : `Edit ${types[type].singular}`}
-                        </h2>
+                    <Routes>
+                        <Route path="/" element={<Navigate to="/inventory" replace />} />
+                        <Route
+                            path="/inventory"
+                            element={<ProductList type="books" token={token} setMessage={setMessage} />}
+                        />
+                        <Route
+                            path="/books/add"
+                            element={<ProductForm type="books" token={token} setMessage={setMessage} />}
+                        />
+                        <Route
+                            path="/books/edit/:id"
+                            element={<ProductForm type="books" token={token} setMessage={setMessage} />}
+                        />
 
-                        <form onSubmit={saveItem}>
-                            {types[type].fields.map(field => (
-                                <div className="form-field" key={field}>
-                                    <label htmlFor={field}>
-                                        {fieldNames[field]}
-                                    </label>
+                        {['magazines', 'discmags', 'tickets'].map(type => (
+                            <Route
+                                key={type}
+                                path={`/${type}`}
+                                element={<ProductList type={type} token={token} setMessage={setMessage} />}
+                            />
+                        ))}
 
-                                    {field === 'hasDisc' ? (
-                                        <input
-                                            id={field}
-                                            name={field}
-                                            type="checkbox"
-                                            checked={form[field]}
-                                            onChange={updateForm}
-                                        />
-                                    ) : (
-                                        <input
-                                            id={field}
-                                            name={field}
-                                            value={form[field]}
-                                            onChange={updateForm}
-                                            type={
-                                                field === 'currentIssue'
-                                                    ? 'datetime-local'
-                                                    : ['price', 'copies', 'orderQty'].includes(field)
-                                                        ? 'number'
-                                                        : 'text'
-                                            }
-                                            step={
-                                                field === 'price'
-                                                    ? '0.01'
-                                                    : ['copies', 'orderQty'].includes(field)
-                                                        ? '1'
-                                                        : undefined
-                                            }
-                                            min={
-                                                ['price', 'copies', 'orderQty'].includes(field)
-                                                    ? '0'
-                                                    : undefined
-                                            }
-                                            required={field !== 'currentIssue'}
-                                        />
-                                    )}
-                                </div>
-                            ))}
+                        {['magazines', 'discmags', 'tickets'].map(type => (
+                            <Route
+                                key={`${type}-add`}
+                                path={`/${type}/add`}
+                                element={<ProductForm type={type} token={token} setMessage={setMessage} />}
+                            />
+                        ))}
 
-                            <button disabled={loading}>
-                                {loading
-                                    ? 'Saving...'
-                                    : editingId === null
-                                        ? `Add ${types[type].singular}`
-                                        : `Update ${types[type].singular}`}
-                            </button>
+                        {['magazines', 'discmags', 'tickets'].map(type => (
+                            <Route
+                                key={`${type}-edit`}
+                                path={`/${type}/edit/:id`}
+                                element={<ProductForm type={type} token={token} setMessage={setMessage} />}
+                            />
+                        ))}
 
-                            {editingId !== null && (
-                                <button
-                                    type="button"
-                                    className="cancel"
-                                    onClick={cancelEdit}
-                                >
-                                    Cancel Edit
-                                </button>
-                            )}
-                        </form>
-                    </div>
+                        <Route path="*" element={<Navigate to="/inventory" replace />} />
+                    </Routes>
                 </>
             )}
 
