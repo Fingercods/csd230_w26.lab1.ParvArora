@@ -1,7 +1,10 @@
 
 import { useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router'
+import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router'
 import './App.css'
+import NavBar from './NavBar'
+import DiscMagList from './DiscMagList'
+import DiscMagForm from './DiscMagForm'
 
 const types = {
     books: {
@@ -450,8 +453,124 @@ function App() {
     const [token, setToken] = useState('')
     const [message, setMessage] = useState('')
     const [loading, setLoading] = useState(false)
+    const [discMags, setDiscMags] = useState([])
+    const [discMagsLoading, setDiscMagsLoading] = useState(false)
     const navigate = useNavigate()
-    const location = useLocation()
+
+    useEffect(() => {
+        if (!token) {
+            return
+        }
+
+        let active = true
+
+        async function loadDiscMags() {
+            setDiscMagsLoading(true)
+
+            try {
+                const response = await fetch('/api/rest/discmags', {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Could not load Disc Magazines (${response.status})`)
+                }
+
+                const data = await response.json()
+
+                if (active) {
+                    setDiscMags(data)
+                }
+            } catch (error) {
+                if (active) {
+                    setMessage(error.message)
+                }
+            } finally {
+                if (active) {
+                    setDiscMagsLoading(false)
+                }
+            }
+        }
+
+        loadDiscMags()
+
+        return () => {
+            active = false
+        }
+    }, [token])
+
+    async function refreshDiscMags() {
+        setDiscMagsLoading(true)
+        setMessage('')
+
+        try {
+            const response = await fetch('/api/rest/discmags', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+
+            if (!response.ok) {
+                throw new Error(`Could not refresh Disc Magazines (${response.status})`)
+            }
+
+            setDiscMags(await response.json())
+            setMessage('Disc Magazines refreshed!')
+        } catch (error) {
+            setMessage(error.message)
+        } finally {
+            setDiscMagsLoading(false)
+        }
+    }
+
+    async function deleteDiscMag(id) {
+        if (!window.confirm('Are you sure you want to delete this Disc Magazine?')) {
+            return
+        }
+
+        setDiscMagsLoading(true)
+        setMessage('')
+
+        try {
+            const response = await fetch(`/api/rest/discmags/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+
+            if (!response.ok) {
+                throw new Error(`Could not delete Disc Magazine (${response.status})`)
+            }
+
+            setDiscMags(previous =>
+                previous.filter(item => item.id !== id)
+            )
+
+            setMessage('Disc Magazine deleted successfully!')
+        } catch (error) {
+            setMessage(error.message)
+        } finally {
+            setDiscMagsLoading(false)
+        }
+    }
+
+    function saveDiscMag(savedItem, editing) {
+        if (!savedItem || savedItem.id === undefined) {
+            refreshDiscMags()
+            return
+        }
+
+        setDiscMags(previous =>
+            editing
+                ? previous.map(item =>
+                    item.id === savedItem.id ? savedItem : item
+                )
+                : [...previous, savedItem]
+        )
+    }
 
     async function login(event) {
         event.preventDefault()
@@ -483,6 +602,7 @@ function App() {
     }
 
     function logout() {
+        setDiscMags([])
         setToken('')
         setPassword('')
         setMessage('Logged out successfully')
@@ -521,37 +641,7 @@ function App() {
                 </div>
             ) : (
                 <>
-                    <div className="card">
-                        <div className="header">
-                            <h2>Products</h2>
-                            <button className="logout" onClick={logout}>
-                                Logout
-                            </button>
-                        </div>
-
-                        <p>Welcome, {username}!</p>
-
-                        <div className="tabs">
-                            {Object.keys(types).map(type => {
-                                const path = type === 'books' ? '/inventory' : `/${type}`
-
-                                return (
-                                    <Link key={type} to={path}>
-                                        <button
-                                            className={
-                                                location.pathname === path ||
-                                                location.pathname.startsWith(`/${type}/`)
-                                                    ? 'active'
-                                                    : ''
-                                            }
-                                        >
-                                            {types[type].label}
-                                        </button>
-                                    </Link>
-                                )
-                            })}
-                        </div>
-                    </div>
+                    <NavBar username={username} onLogout={logout} />
 
                     <Routes>
                         <Route path="/" element={<Navigate to="/inventory" replace />} />
@@ -568,7 +658,7 @@ function App() {
                             element={<ProductForm type="books" token={token} setMessage={setMessage} />}
                         />
 
-                        {['magazines', 'discmags', 'tickets'].map(type => (
+                        {['magazines', 'tickets'].map(type => (
                             <Route
                                 key={type}
                                 path={`/${type}`}
@@ -576,7 +666,7 @@ function App() {
                             />
                         ))}
 
-                        {['magazines', 'discmags', 'tickets'].map(type => (
+                        {['magazines', 'tickets'].map(type => (
                             <Route
                                 key={`${type}-add`}
                                 path={`/${type}/add`}
@@ -584,13 +674,47 @@ function App() {
                             />
                         ))}
 
-                        {['magazines', 'discmags', 'tickets'].map(type => (
+                        {['magazines', 'tickets'].map(type => (
                             <Route
                                 key={`${type}-edit`}
                                 path={`/${type}/edit/:id`}
                                 element={<ProductForm type={type} token={token} setMessage={setMessage} />}
                             />
                         ))}
+
+                        <Route
+                            path="/discmags"
+                            element={
+                                <DiscMagList
+                                    discMags={discMags}
+                                    loading={discMagsLoading}
+                                    onRefresh={refreshDiscMags}
+                                    onDelete={deleteDiscMag}
+                                />
+                            }
+                        />
+
+                        <Route
+                            path="/discmags/add"
+                            element={
+                                <DiscMagForm
+                                    token={token}
+                                    onSaved={saveDiscMag}
+                                    setMessage={setMessage}
+                                />
+                            }
+                        />
+
+                        <Route
+                            path="/discmags/edit/:id"
+                            element={
+                                <DiscMagForm
+                                    token={token}
+                                    onSaved={saveDiscMag}
+                                    setMessage={setMessage}
+                                />
+                            }
+                        />
 
                         <Route path="*" element={<Navigate to="/inventory" replace />} />
                     </Routes>
