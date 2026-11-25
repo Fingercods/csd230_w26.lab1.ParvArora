@@ -1,8 +1,12 @@
+import api from './api.js'
+import useAuth from './useAuth.js'
 
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 
-function DiscMagForm({ token, onSaved, setMessage }) {
+function DiscMagForm({ onSaved, setMessage }) {
+    const { token, isAdmin } = useAuth()
+    const isCurrent = () => localStorage.getItem('token') === token
     const { id } = useParams()
     const navigate = useNavigate()
     const editing = id !== undefined
@@ -27,19 +31,10 @@ function DiscMagForm({ token, onSaved, setMessage }) {
 
         async function loadDiscMag() {
             try {
-                const response = await fetch(`/api/rest/discmags/${id}`, {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                })
+                const response = await api.get(`/discmags/${id}`)
+                const item = response.data
 
-                if (!response.ok) {
-                    throw new Error(`Could not load Disc Magazine (${response.status})`)
-                }
-
-                const item = await response.json()
-
-                if (active) {
+                if (active && localStorage.getItem('token') === token) {
                     setForm({
                         title: item.title ?? '',
                         price: String(item.price ?? ''),
@@ -52,9 +47,13 @@ function DiscMagForm({ token, onSaved, setMessage }) {
                     })
                 }
             } catch (err) {
-                if (active) setError(err.message)
+                if (active && localStorage.getItem('token') === token) {
+                    setError(err.response?.status === 403
+                        ? 'Permission denied.'
+                        : err.message)
+                }
             } finally {
-                if (active) setLoadingItem(false)
+                if (active && localStorage.getItem('token') === token) setLoadingItem(false)
             }
         }
 
@@ -76,6 +75,7 @@ function DiscMagForm({ token, onSaved, setMessage }) {
 
     async function saveDiscMag(event) {
         event.preventDefault()
+        if (!isAdmin || !isCurrent() || loading) return
         setLoading(true)
         setError('')
         setMessage('')
@@ -92,34 +92,28 @@ function DiscMagForm({ token, onSaved, setMessage }) {
         }
 
         try {
-            const response = await fetch(
-                editing
-                    ? `/api/rest/discmags/${id}`
-                    : '/api/rest/discmags',
-                {
-                    method: editing ? 'PUT' : 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`
-                    },
-                    body: JSON.stringify(payload)
-                }
-            )
+            const response = editing
+                ? await api.put(`/discmags/${id}`, payload)
+                : await api.post('/discmags', payload)
 
-            if (!response.ok) {
-                throw new Error(`Could not save Disc Magazine (${response.status})`)
-            }
+            if (!isCurrent()) return
 
-            const savedItem = await response.json()
+            const savedItem = response.data
 
             onSaved(savedItem, editing)
             setMessage('Disc Magazine saved successfully!')
             navigate('/discmags')
         } catch (err) {
-            setError(err.message)
-            setMessage(err.message)
+            if (isCurrent()) {
+                const message = err.response?.status === 403
+                    ? 'Permission denied. Administrator access is required.'
+                    : err.message
+
+                setError(message)
+                setMessage(message)
+            }
         } finally {
-            setLoading(false)
+            if (isCurrent()) setLoading(false)
         }
     }
 

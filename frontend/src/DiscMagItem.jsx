@@ -1,5 +1,11 @@
-
-function DiscMagItem({ discMag, onEdit, onDelete }) {
+function DiscMagItem({
+    discMag,
+    onEdit,
+    onDelete,
+    canManage,
+    onAddToCart,
+    cartPending
+}) {
     return (
         <tr>
             <td>{discMag.id}</td>
@@ -15,15 +21,27 @@ function DiscMagItem({ discMag, onEdit, onDelete }) {
             <td>{discMag.hasDisc ? 'Yes' : 'No'}</td>
             <td>
                 <div className="actions">
-                    <button onClick={() => onEdit(discMag.id)}>
-                        Edit
-                    </button>
                     <button
-                        className="delete"
-                        onClick={() => onDelete(discMag.id)}
+                        disabled={cartPending}
+                        onClick={() => onAddToCart(discMag.id)}
                     >
-                        Delete
+                        Add to Cart
                     </button>
+
+                    {canManage && (
+                        <>
+                            <button onClick={() => onEdit(discMag.id)}>
+                                Edit
+                            </button>
+
+                            <button
+                                className="delete"
+                                onClick={() => onDelete(discMag.id)}
+                            >
+                                Delete
+                            </button>
+                        </>
+                    )}
                 </div>
             </td>
         </tr>

@@ -1,8 +1,15 @@
-
 import { useNavigate } from 'react-router'
 import DiscMagItem from './DiscMagItem'
 
-function DiscMagList({ discMags, loading, onRefresh, onDelete }) {
+function DiscMagList({
+    discMags,
+    loading,
+    onRefresh,
+    onDelete,
+    canManage,
+    onAddToCart,
+    cartPending
+}) {
     const navigate = useNavigate()
 
     return (
@@ -15,12 +22,14 @@ function DiscMagList({ discMags, loading, onRefresh, onDelete }) {
                         Refresh
                     </button>
 
-                    <button
-                        disabled={loading}
-                        onClick={() => navigate('/discmags/add')}
-                    >
-                        Add Disc Magazine
-                    </button>
+                    {canManage && (
+                        <button
+                            disabled={loading}
+                            onClick={() => navigate('/discmags/add')}
+                        >
+                            Add Disc Magazine
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -50,6 +59,9 @@ function DiscMagList({ discMags, loading, onRefresh, onDelete }) {
                                     discMag={discMag}
                                     onEdit={id => navigate(`/discmags/edit/${id}`)}
                                     onDelete={onDelete}
+                                    canManage={canManage}
+                                    onAddToCart={onAddToCart}
+                                    cartPending={cartPending}
                                 />
                             ))}
                             </tbody>

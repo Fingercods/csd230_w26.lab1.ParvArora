@@ -497,7 +497,8 @@ function SignedInBookApp() {
 }
 
 function BookApp() {
-    const { token, logout } = useAuth()
+    const { token, logout, isAdmin } = useAuth()
+    const isCurrent = () => localStorage.getItem('token') === token
     const [cart, setCart] = useState({ products: [] })
     const [cartLoading, setCartLoading] = useState(true)
     const [message, setMessage] = useState('')
@@ -506,37 +507,26 @@ function BookApp() {
     const navigate = useNavigate()
 
     useEffect(() => {
-        if (!token) {
-            return
-        }
-
         let active = true
 
         async function loadDiscMags() {
+            if (localStorage.getItem('token') !== token) return
             setDiscMagsLoading(true)
 
             try {
-                const response = await fetch('/api/rest/discmags', {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                })
+                const response = await api.get('/discmags')
 
-                if (!response.ok) {
-                    throw new Error(`Could not load Disc Magazines (${response.status})`)
-                }
-
-                const data = await response.json()
-
-                if (active) {
-                    setDiscMags(data)
+                if (active && localStorage.getItem('token') === token) {
+                    setDiscMags(response.data)
                 }
             } catch (error) {
-                if (active) {
-                    setMessage(error.message)
+                if (active && localStorage.getItem('token') === token) {
+                    setMessage(error.response?.status === 403
+                        ? 'Permission denied.'
+                        : error.message)
                 }
             } finally {
-                if (active) {
+                if (active && localStorage.getItem('token') === token) {
                     setDiscMagsLoading(false)
                 }
             }
@@ -550,30 +540,32 @@ function BookApp() {
     }, [token])
 
     async function refreshDiscMags() {
+        if (!isCurrent() || discMagsLoading) return
+
         setDiscMagsLoading(true)
         setMessage('')
 
         try {
-            const response = await fetch('/api/rest/discmags', {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            })
+            const response = await api.get('/discmags')
 
-            if (!response.ok) {
-                throw new Error(`Could not refresh Disc Magazines (${response.status})`)
-            }
+            if (!isCurrent()) return
 
-            setDiscMags(await response.json())
+            setDiscMags(response.data)
             setMessage('Disc Magazines refreshed!')
         } catch (error) {
-            setMessage(error.message)
+            if (isCurrent()) {
+                setMessage(error.response?.status === 403
+                    ? 'Permission denied.'
+                    : error.message)
+            }
         } finally {
-            setDiscMagsLoading(false)
+            if (isCurrent()) setDiscMagsLoading(false)
         }
     }
 
     async function deleteDiscMag(id) {
+        if (!isAdmin || !isCurrent() || discMagsLoading) return
+
         if (!window.confirm('Are you sure you want to delete this Disc Magazine?')) {
             return
         }
@@ -582,16 +574,9 @@ function BookApp() {
         setMessage('')
 
         try {
-            const response = await fetch(`/api/rest/discmags/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            })
+            await api.delete(`/discmags/${id}`)
 
-            if (!response.ok) {
-                throw new Error(`Could not delete Disc Magazine (${response.status})`)
-            }
+            if (!isCurrent()) return
 
             setDiscMags(previous =>
                 previous.filter(item => item.id !== id)
@@ -599,17 +584,18 @@ function BookApp() {
 
             setMessage('Disc Magazine deleted successfully!')
         } catch (error) {
-            setMessage(error.message)
+            if (isCurrent()) {
+                setMessage(error.response?.status === 403
+                    ? 'Permission denied. Administrator access is required.'
+                    : error.message)
+            }
         } finally {
-            setDiscMagsLoading(false)
+            if (isCurrent()) setDiscMagsLoading(false)
         }
     }
 
     function saveDiscMag(savedItem, editing) {
-        if (!savedItem || savedItem.id === undefined) {
-            refreshDiscMags()
-            return
-        }
+        if (!isCurrent() || !isAdmin) return
 
         setDiscMags(previous =>
             editing
@@ -728,6 +714,9 @@ function BookApp() {
                                     loading={discMagsLoading}
                                     onRefresh={refreshDiscMags}
                                     onDelete={deleteDiscMag}
+                                    canManage={isAdmin}
+                                    onAddToCart={updateCart}
+                                    cartPending={cartLoading}
                                 />
                             }
                         />
@@ -735,22 +724,24 @@ function BookApp() {
                         <Route
                             path="/discmags/add"
                             element={
-                                <DiscMagForm
-                                    token={token}
-                                    onSaved={saveDiscMag}
-                                    setMessage={setMessage}
-                                />
+                                <AdminRoute>
+                                    <DiscMagForm
+                                        onSaved={saveDiscMag}
+                                        setMessage={setMessage}
+                                    />
+                                </AdminRoute>
                             }
                         />
 
                         <Route
                             path="/discmags/edit/:id"
                             element={
-                                <DiscMagForm
-                                    token={token}
-                                    onSaved={saveDiscMag}
-                                    setMessage={setMessage}
-                                />
+                                <AdminRoute>
+                                    <DiscMagForm
+                                        onSaved={saveDiscMag}
+                                        setMessage={setMessage}
+                                    />
+                                </AdminRoute>
                             }
                         />
 
