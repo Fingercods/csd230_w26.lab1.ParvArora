@@ -1,3 +1,8 @@
+import AuthProvider from './AuthProvider.jsx'
+import useAuth from './useAuth.js'
+import Login from './Login.jsx'
+import ProtectedRoute from './ProtectedRoute.jsx'
+import DisplayCart from './DisplayCart.jsx'
 
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router'
@@ -94,7 +99,7 @@ async function getProducts(type, token) {
     return response.data
 }
 
-function ProductList({ type, token, setMessage }) {
+function ProductList({ type, token, setMessage, onAddToCart, cartLoading }) {
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(true)
     const navigate = useNavigate()
@@ -220,6 +225,12 @@ function ProductList({ type, token, setMessage }) {
                                     ))}
                                     <td>
                                         <div className="actions">
+                                            <button
+                                                disabled={cartLoading}
+                                                onClick={() => onAddToCart(item.id)}
+                                            >
+                                                Add to Cart
+                                            </button>
                                             <button onClick={() => navigate(`/${type}/edit/${item.id}`)}>
                                                 Edit
                                             </button>
@@ -457,11 +468,28 @@ function ProductForm({ type, token, setMessage }) {
 }
 
 function App() {
-    const [username, setUsername] = useState('user')
-    const [password, setPassword] = useState('user')
-    const [token, setToken] = useState('')
+    return (
+        <AuthProvider>
+            <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route element={<ProtectedRoute />}>
+                    <Route path="*" element={<SignedInBookApp />} />
+                </Route>
+            </Routes>
+        </AuthProvider>
+    )
+}
+
+function SignedInBookApp() {
+    const { token } = useAuth()
+    return <BookApp key={token} />
+}
+
+function BookApp() {
+    const { token, logout } = useAuth()
+    const [cart, setCart] = useState({ products: [] })
+    const [cartLoading, setCartLoading] = useState(true)
     const [message, setMessage] = useState('')
-    const [loading, setLoading] = useState(false)
     const [discMags, setDiscMags] = useState([])
     const [discMagsLoading, setDiscMagsLoading] = useState(false)
     const navigate = useNavigate()
@@ -581,41 +609,55 @@ function App() {
         )
     }
 
-    async function login(event) {
-        event.preventDefault()
-        setLoading(true)
+    useEffect(() => {
+        let active = true
+
+        api.get('/carts/mine')
+            .then(response => {
+                if (active && localStorage.getItem('token') === token) {
+                    setCart(response.data || { products: [] })
+                }
+            })
+            .catch(error => {
+                if (active) setMessage(error.message)
+            })
+            .finally(() => {
+                if (active) setCartLoading(false)
+            })
+
+        return () => {
+            active = false
+        }
+    }, [token])
+
+    async function updateCart(id, remove = false) {
+        if (cartLoading || localStorage.getItem('token') !== token) return
+
+        setCartLoading(true)
         setMessage('')
 
         try {
-            const response = await fetch('/api/rest/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password })
-            })
+            const url = `/carts/mine/products/${id}`
+            const response = remove
+                ? await api.delete(url)
+                : await api.post(url)
 
-            if (!response.ok) {
-                throw new Error('Invalid username or password')
-            }
+            if (localStorage.getItem('token') !== token) return
 
-            const data = await response.json()
-            setToken(data.token)
-            setMessage('Login successful!')
-            navigate('/inventory')
+            setCart(response.data || { products: [] })
+            setMessage(remove ? 'Product removed from cart!' : 'Product added to cart!')
         } catch (error) {
-            setMessage(error.message)
+            if (localStorage.getItem('token') === token) {
+                setMessage(error.message)
+            }
         } finally {
-            setLoading(false)
+            setCartLoading(false)
         }
     }
 
-    function logout() {
-        setDiscMags([])
-        setToken('')
-        setPassword('')
-        setMessage('Logged out successfully')
-        navigate('/inventory')
+    function handleLogout() {
+        logout()
+        navigate('/login', { replace: true })
     }
 
     return (
@@ -623,40 +665,16 @@ function App() {
             <h1>Bookstore</h1>
             <p className="subtitle">CSD230 React + Spring Boot CRUD</p>
 
-            {!token ? (
-                <div className="card">
-                    <h2>Login</h2>
-
-                    <form onSubmit={login}>
-                        <label>Username</label>
-                        <input
-                            value={username}
-                            onChange={event => setUsername(event.target.value)}
-                            required
-                        />
-
-                        <label>Password</label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={event => setPassword(event.target.value)}
-                            required
-                        />
-
-                        <button disabled={loading}>
-                            {loading ? 'Please wait...' : 'Login'}
-                        </button>
-                    </form>
-                </div>
-            ) : (
-                <>
-                    <NavBar username={username} onLogout={logout} />
+            <NavBar
+                onLogout={handleLogout}
+                cartCount={cart.products?.length || 0}
+            />
 
                     <Routes>
                         <Route path="/" element={<Navigate to="/inventory" replace />} />
                         <Route
                             path="/inventory"
-                            element={<ProductList type="books" token={token} setMessage={setMessage} />}
+                            element={<ProductList type="books" token={token} setMessage={setMessage} onAddToCart={updateCart} cartLoading={cartLoading} />}
                         />
                         <Route
                             path="/books/add"
@@ -671,7 +689,7 @@ function App() {
                             <Route
                                 key={type}
                                 path={`/${type}`}
-                                element={<ProductList type={type} token={token} setMessage={setMessage} />}
+                                element={<ProductList type={type} token={token} setMessage={setMessage} onAddToCart={updateCart} cartLoading={cartLoading} />}
                             />
                         ))}
 
@@ -725,10 +743,19 @@ function App() {
                             }
                         />
 
+                        <Route
+                            path="/cart"
+                            element={
+                                <DisplayCart
+                                    cart={cart}
+                                    loading={cartLoading}
+                                    onRemove={id => updateCart(id, true)}
+                                />
+                            }
+                        />
+
                         <Route path="*" element={<Navigate to="/inventory" replace />} />
                     </Routes>
-                </>
-            )}
 
             {message && (
                 <p className="message" role="status">

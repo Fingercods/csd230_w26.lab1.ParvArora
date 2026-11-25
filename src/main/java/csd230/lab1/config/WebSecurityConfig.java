@@ -1,4 +1,3 @@
-
 package csd230.lab1.config;
 
 import csd230.lab1.auth.JwtAuthorizationFilter;
@@ -6,6 +5,7 @@ import csd230.lab1.services.CustomUserDetailsService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -26,12 +26,14 @@ public class WebSecurityConfig {
     public WebSecurityConfig(
             CustomUserDetailsService userDetailsService,
             JwtAuthorizationFilter jwtAuthorizationFilter) {
+
         this.userDetailsService = userDetailsService;
         this.jwtAuthorizationFilter = jwtAuthorizationFilter;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
         http
                 .csrf(csrf -> csrf
                         .ignoringRequestMatchers("/api/rest/**")
@@ -48,13 +50,27 @@ public class WebSecurityConfig {
                                 "/v3/api-docs/**",
                                 "/api/rest/auth/**"
                         ).permitAll()
-                        .requestMatchers("/api/rest/**")
+
+                        .requestMatchers(
+                                "/api/rest/carts/mine",
+                                "/api/rest/carts/mine/**"
+                        ).hasAnyRole("USER", "ADMIN")
+
+                        .requestMatchers("/api/rest/carts/**")
+                        .hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/rest/**")
                         .hasAnyRole("USER", "ADMIN")
+
+                        .requestMatchers("/api/rest/**")
+                        .hasRole("ADMIN")
+
                         .requestMatchers(
                                 "/books/add",
                                 "/books/edit/**",
                                 "/books/delete/**"
                         ).hasRole("ADMIN")
+
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions

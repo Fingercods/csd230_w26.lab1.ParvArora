@@ -1,7 +1,6 @@
-
 import { NavLink } from 'react-router'
 
-function NavBar({ username, onLogout }) {
+function NavBar({ onLogout, cartCount = 0 }) {
     const links = [
         { path: '/inventory', label: 'Books' },
         { path: '/books/add', label: 'Add Book' },
@@ -9,7 +8,8 @@ function NavBar({ username, onLogout }) {
         { path: '/magazines/add', label: 'Add Magazine' },
         { path: '/discmags', label: 'Disc Magazines' },
         { path: '/discmags/add', label: 'Add Disc Magazine' },
-        { path: '/tickets', label: 'Tickets' }
+        { path: '/tickets', label: 'Tickets' },
+        { path: '/cart', label: `Cart (${cartCount})` }
     ]
 
     return (
@@ -21,8 +21,6 @@ function NavBar({ username, onLogout }) {
                     Logout
                 </button>
             </div>
-
-            <p>Welcome, {username}!</p>
 
             <nav className="tabs">
                 {links.map(link => (
