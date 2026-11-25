@@ -5,6 +5,7 @@ import './App.css'
 import NavBar from './NavBar'
 import DiscMagList from './DiscMagList'
 import DiscMagForm from './DiscMagForm'
+import api from './api.js'
 
 const types = {
     books: {
@@ -69,6 +70,30 @@ function displayValue(item, field) {
     return item[field] ?? '-'
 }
 
+async function getProducts(type, token) {
+    if (type === 'tickets') {
+        const response = await fetch(`/api/rest/${type}`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        })
+
+        if (!response.ok) {
+            throw new Error(`Could not load ${types[type].label} (${response.status})`)
+        }
+
+        return response.json()
+    }
+
+    const response = await api.get(`/${type}`, {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    })
+
+    return response.data
+}
+
 function ProductList({ type, token, setMessage }) {
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(true)
@@ -81,17 +106,7 @@ function ProductList({ type, token, setMessage }) {
             setLoading(true)
 
             try {
-                const response = await fetch(`/api/rest/${type}`, {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                })
-
-                if (!response.ok) {
-                    throw new Error(`Could not load ${types[type].label} (${response.status})`)
-                }
-
-                const data = await response.json()
+                const data = await getProducts(type, token)
 
                 if (active) {
                     setItems(data)
@@ -119,17 +134,8 @@ function ProductList({ type, token, setMessage }) {
         setMessage('')
 
         try {
-            const response = await fetch(`/api/rest/${type}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            })
-
-            if (!response.ok) {
-                throw new Error(`Could not load ${types[type].label} (${response.status})`)
-            }
-
-            setItems(await response.json())
+            const data = await getProducts(type, token)
+            setItems(data)
             setMessage(`${types[type].label} refreshed!`)
         } catch (error) {
             setMessage(error.message)
@@ -147,28 +153,27 @@ function ProductList({ type, token, setMessage }) {
         setMessage('')
 
         try {
-            const response = await fetch(`/api/rest/${type}/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            })
+            if (type === 'tickets') {
+                const response = await fetch(`/api/rest/${type}/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
 
-            if (!response.ok) {
-                throw new Error(`Could not delete ${types[type].singular} (${response.status})`)
+                if (!response.ok) {
+                    throw new Error(`Could not delete ${types[type].singular} (${response.status})`)
+                }
+            } else {
+                await api.delete(`/${type}/${id}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
             }
 
-            const listResponse = await fetch(`/api/rest/${type}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            })
-
-            if (!listResponse.ok) {
-                throw new Error(`Deleted, but could not refresh list (${listResponse.status})`)
-            }
-
-            setItems(await listResponse.json())
+            const data = await getProducts(type, token)
+            setItems(data)
             setMessage(`${types[type].singular} deleted successfully!`)
         } catch (error) {
             setMessage(error.message)
@@ -259,17 +264,7 @@ function ProductForm({ type, token, setMessage }) {
             setLoadError('')
 
             try {
-                const response = await fetch(`/api/rest/${type}`, {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                })
-
-                if (!response.ok) {
-                    throw new Error(`Could not load ${types[type].singular} (${response.status})`)
-                }
-
-                const items = await response.json()
+                const items = await getProducts(type, token)
                 const item = items.find(value => String(value.id) === String(id))
 
                 if (!item) {
@@ -340,22 +335,36 @@ function ProductForm({ type, token, setMessage }) {
                 : null
         }
 
-        const url = editing
-            ? `/api/rest/${type}/${id}`
-            : `/api/rest/${type}`
-
         try {
-            const response = await fetch(url, {
-                method: editing ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            })
+            if (type === 'tickets') {
+                const url = editing
+                    ? `/api/rest/${type}/${id}`
+                    : `/api/rest/${type}`
 
-            if (!response.ok) {
-                throw new Error(`Could not save ${types[type].singular} (${response.status})`)
+                const response = await fetch(url, {
+                    method: editing ? 'PUT' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Could not save ${types[type].singular} (${response.status})`)
+                }
+            } else {
+                const config = {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+
+                if (editing) {
+                    await api.put(`/${type}/${id}`, payload, config)
+                } else {
+                    await api.post(`/${type}`, payload, config)
+                }
             }
 
             setMessage(`${types[type].singular} saved successfully!`)
