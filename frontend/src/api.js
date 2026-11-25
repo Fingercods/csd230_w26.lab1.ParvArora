@@ -14,4 +14,27 @@ api.interceptors.request.use(config => {
     return config;
 });
 
+let redirecting = false;
+
+api.interceptors.response.use(response => response, error => {
+    const requestToken = error.config?.authToken;
+
+    if (
+        error.response?.status === 401 &&
+        requestToken &&
+        error.config.url !== '/auth/login' &&
+        requestToken === globalThis.localStorage?.getItem('token')
+    ) {
+        localStorage.removeItem('token');
+        window.dispatchEvent(new Event('auth:invalid'));
+
+        if (!redirecting && window.location.pathname !== '/login') {
+            redirecting = true;
+            window.location.replace('/login?reauth=true');
+        }
+    }
+
+    return Promise.reject(error);
+});
+
 export default api;

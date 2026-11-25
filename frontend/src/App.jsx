@@ -1,3 +1,4 @@
+import AdminRoute from './AdminRoute.jsx'
 import AuthProvider from './AuthProvider.jsx'
 import useAuth from './useAuth.js'
 import Login from './Login.jsx'
@@ -100,6 +101,7 @@ async function getProducts(type, token) {
 }
 
 function ProductList({ type, token, setMessage, onAddToCart, cartLoading }) {
+    const { isAdmin } = useAuth()
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(true)
     const navigate = useNavigate()
@@ -150,6 +152,7 @@ function ProductList({ type, token, setMessage, onAddToCart, cartLoading }) {
     }
 
     async function deleteItem(id) {
+        if (!isAdmin || localStorage.getItem('token') !== token) return
         if (!window.confirm(`Are you sure you want to delete this ${types[type].singular}?`)) {
             return
         }
@@ -195,9 +198,11 @@ function ProductList({ type, token, setMessage, onAddToCart, cartLoading }) {
                     <button disabled={loading} onClick={refresh}>
                         Refresh
                     </button>
-                    <button disabled={loading} onClick={() => navigate(`/${type}/add`)}>
-                        Add {types[type].singular}
-                    </button>
+                    {isAdmin && (
+                        <button disabled={loading} onClick={() => navigate(`/${type}/add`)}>
+                            Add {types[type].singular}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -231,12 +236,16 @@ function ProductList({ type, token, setMessage, onAddToCart, cartLoading }) {
                                             >
                                                 Add to Cart
                                             </button>
-                                            <button onClick={() => navigate(`/${type}/edit/${item.id}`)}>
-                                                Edit
-                                            </button>
-                                            <button className="delete" onClick={() => deleteItem(item.id)}>
-                                                Delete
-                                            </button>
+                                            {isAdmin && (
+                                                <>
+                                                    <button onClick={() => navigate(`/${type}/edit/${item.id}`)}>
+                                                        Edit
+                                                    </button>
+                                                    <button className="delete" onClick={() => deleteItem(item.id)}>
+                                                        Delete
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -378,8 +387,10 @@ function ProductForm({ type, token, setMessage }) {
                 }
             }
 
+            if (localStorage.getItem('token') !== token) return
+
             setMessage(`${types[type].singular} saved successfully!`)
-            navigate(`/${type}`)
+            navigate(type === 'books' ? '/inventory' : `/${type}`)
         } catch (error) {
             setMessage(error.message)
         } finally {
@@ -678,11 +689,11 @@ function BookApp() {
                         />
                         <Route
                             path="/books/add"
-                            element={<ProductForm type="books" token={token} setMessage={setMessage} />}
+                            element={<AdminRoute><ProductForm type="books" token={token} setMessage={setMessage} /></AdminRoute>}
                         />
                         <Route
                             path="/books/edit/:id"
-                            element={<ProductForm type="books" token={token} setMessage={setMessage} />}
+                            element={<AdminRoute><ProductForm type="books" token={token} setMessage={setMessage} /></AdminRoute>}
                         />
 
                         {['magazines', 'tickets'].map(type => (
@@ -697,7 +708,7 @@ function BookApp() {
                             <Route
                                 key={`${type}-add`}
                                 path={`/${type}/add`}
-                                element={<ProductForm type={type} token={token} setMessage={setMessage} />}
+                                element={<AdminRoute><ProductForm type={type} token={token} setMessage={setMessage} /></AdminRoute>}
                             />
                         ))}
 
@@ -705,7 +716,7 @@ function BookApp() {
                             <Route
                                 key={`${type}-edit`}
                                 path={`/${type}/edit/:id`}
-                                element={<ProductForm type={type} token={token} setMessage={setMessage} />}
+                                element={<AdminRoute><ProductForm type={type} token={token} setMessage={setMessage} /></AdminRoute>}
                             />
                         ))}
 
